@@ -22,8 +22,28 @@
 	const hover = ref(false);
 	const fileInput = useTemplateRef("file");
 
-	function pickFile(): void {
-		fileInput.value?.click();
+	async function pickFile(): Promise<void> {
+		// 優先使用 File System Access API；不支援的瀏覽器退回 hidden input
+		if (!("showOpenFilePicker" in window)) {
+			fileInput.value?.click();
+			return;
+		}
+		let handle: FileSystemFileHandle;
+		try {
+			[handle] = await window.showOpenFilePicker({
+				types: [{
+					description: "圖片",
+					accept: {
+						"image/png": [".png"],
+						"image/jpeg": [".jpg", ".jpeg"],
+						"image/webp": [".webp"],
+					},
+				}],
+			});
+		} catch {
+			return; // 使用者取消
+		}
+		emit("select", await handle.getFile());
 	}
 
 	function onFilePicked(): void {

@@ -137,17 +137,33 @@
 		isError.value = false;
 	}
 
-	function save(): void {
+	async function save(): Promise<void> {
 		if (!lastProcessed) return;
-		lastProcessed.toBlob(blob => {
-			if (!blob) return;
+		const c = lastProcessed;
+		const blob = await new Promise<Blob | null>(resolve => c.toBlob(resolve, "image/png"));
+		if (!blob) return;
+		const name = sourceFileName.replace(/\.[^.]+$/, "") + "_nowm.png";
+		// 優先使用 File System Access API；不支援的瀏覽器退回 <a download>
+		if ("showSaveFilePicker" in window) {
+			let handle: FileSystemFileHandle;
+			try {
+				handle = await window.showSaveFilePicker({
+					suggestedName: name,
+					types: [{ description: "PNG 圖片", accept: { "image/png": [".png"] } }],
+				});
+			} catch {
+				return; // 使用者取消
+			}
+			const writable = await handle.createWritable();
+			await writable.write(blob);
+			await writable.close();
+		} else {
 			const a = document.createElement("a");
-			const base = sourceFileName.replace(/\.[^.]+$/, "");
 			a.href = URL.createObjectURL(blob);
-			a.download = base + "_nowm.png";
+			a.download = name;
 			a.click();
 			setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-		}, "image/png");
+		}
 	}
 
 	onMounted(() => {
