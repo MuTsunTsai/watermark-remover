@@ -1,0 +1,15 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"lib": ["DOM", "DOM.Iterable", "ES2022"],
+		"strict": true,
+		"types": ["@rsbuild/core/types"],
+		"noUncheckedIndexedAccess": false,
+		"isolatedModules": true,
+		"skipLibCheck": true,
+		"noEmit": true
+	},
+	"include": ["src", "rsbuild.config.ts"]
+}
