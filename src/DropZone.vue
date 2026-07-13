@@ -16,8 +16,9 @@
 
 <script setup lang="ts">
 	import { ref, useTemplateRef } from "vue";
+	import { extractDroppedFile } from "./file-drop";
 
-	const emit = defineEmits<{ select: [file: File] }>();
+	const emit = defineEmits<{ select: [file: File, handle: FileSystemFileHandle | null] }>();
 
 	const hover = ref(false);
 	const fileInput = useTemplateRef("file");
@@ -43,21 +44,22 @@
 		} catch {
 			return; // 使用者取消
 		}
-		emit("select", await handle.getFile());
+		emit("select", await handle.getFile(), handle);
 	}
 
 	function onFilePicked(): void {
 		const inp = fileInput.value;
 		const f = inp?.files?.[0];
-		if (f) emit("select", f);
+		if (f) emit("select", f, null);
 		// 清空 value，讓下次重選同一個檔案也會觸發 change
 		if (inp) inp.value = "";
 	}
 
 	function onDrop(e: DragEvent): void {
 		hover.value = false;
-		const f = e.dataTransfer?.files?.[0];
-		if (f) emit("select", f);
+		const dropped = extractDroppedFile(e.dataTransfer);
+		if (!dropped) return;
+		void dropped.handle.then(h => emit("select", dropped.file, h));
 	}
 </script>
 

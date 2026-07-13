@@ -36,7 +36,20 @@
 				</label>
 			</template>
 			<button class="secondary" :disabled="!sourceImage" @click="reset">重新選擇</button>
-			<button :disabled="!sourceImage" @click="save">儲存 PNG</button>
+			<template v-if="supportsFsa">
+				<button
+					class="save-btn"
+					:class="{ saved: justSaved }"
+					:disabled="!sourceImage || !sourceHandle"
+					:title="sourceHandle ? '直接覆寫原始檔案' : '來源沒有對應的檔案，無法直接覆寫'"
+					@click="save"
+				>
+					<span v-if="justSaved" class="check">✔</span>
+					<template v-else>存檔</template>
+				</button>
+				<button :disabled="!sourceImage" @click="saveAs">另存新檔</button>
+			</template>
+			<button v-else :disabled="!sourceImage" @click="saveAs">儲存 PNG</button>
 		</div>
 	</header>
 	<main>
@@ -51,6 +64,7 @@
 <script setup lang="ts">
 	import { computed, onMounted, ref, shallowRef, useTemplateRef, watchEffect } from "vue";
 	import DropZone from "./DropZone.vue";
+	import { extractDroppedFile } from "./file-drop";
 	import { loadImage, removeWatermark, type RemovalMode, type RemovalOptions } from "./remover";
 
 	type WatermarkType = "new" | "old" | "custom";
@@ -64,14 +78,20 @@
 	const customMarginBottom = ref(192);
 	const customAddScale = ref(1);
 
+	const supportsFsa = "showSaveFilePicker" in window;
+
 	const sourceImage = shallowRef<HTMLImageElement | null>(null);
+	const sourceHandle = shallowRef<FileSystemFileHandle | null>(null);
 	const info = ref("");
 	const isError = ref(false);
+	const justSaved = ref(false);
 
 	const previewCanvas = useTemplateRef("preview");
 
 	let sourceFileName = "";
+	let sourceType = "";
 	let lastProcessed: HTMLCanvasElement | null = null;
+	let savedTimer = 0;
 
 	const options = computed<RemovalOptions | null>(() => {
 		const img = sourceImage.value;
@@ -112,13 +132,16 @@
 		isError.value = false;
 	});
 
-	async function loadFile(file: File): Promise<void> {
+	async function loadFile(file: File, handle: FileSystemFileHandle | null = null): Promise<void> {
 		if (!/^image\/(png|jpeg|webp)$/.test(file.type)) {
 			info.value = "不支援的檔案類型：" + (file.type || file.name);
 			isError.value = true;
 			return;
 		}
 		sourceFileName = file.name;
+		sourceType = file.type;
+		sourceHandle.value = handle;
+		justSaved.value = false;
 		const url = URL.createObjectURL(file);
 		try {
 			sourceImage.value = await loadImage(url);
@@ -132,19 +155,46 @@
 
 	function reset(): void {
 		sourceImage.value = null;
+		sourceHandle.value = null;
 		lastProcessed = null;
 		info.value = "";
 		isError.value = false;
+		justSaved.value = false;
 	}
 
-	async function save(): Promise<void> {
-		if (!lastProcessed) return;
+	function processedToBlob(type: string): Promise<Blob | null> {
 		const c = lastProcessed;
-		const blob = await new Promise<Blob | null>(resolve => c.toBlob(resolve, "image/png"));
+		if (!c) return Promise.resolve(null);
+		return new Promise(resolve => c.toBlob(resolve, type));
+	}
+
+	// 存檔：直接覆寫來源檔案（保留原檔名與格式），成功後以打勾動畫提示
+	async function save(): Promise<void> {
+		const handle = sourceHandle.value;
+		if (!handle) return;
+		const blob = await processedToBlob(sourceType || "image/png");
+		if (!blob) return;
+		try {
+			if (await handle.requestPermission({ mode: "readwrite" }) !== "granted") return;
+			const writable = await handle.createWritable();
+			await writable.write(blob);
+			await writable.close();
+		} catch {
+			info.value = "存檔失敗";
+			isError.value = true;
+			return;
+		}
+		justSaved.value = true;
+		clearTimeout(savedTimer);
+		savedTimer = window.setTimeout(() => { justSaved.value = false; }, 1500);
+	}
+
+	// 另存新檔：加上 _nowm 後綴，跳存檔對話方塊；不支援 FSA 的瀏覽器退回 <a download>
+	async function saveAs(): Promise<void> {
+		const blob = await processedToBlob("image/png");
 		if (!blob) return;
 		const name = sourceFileName.replace(/\.[^.]+$/, "") + "_nowm.png";
-		// 優先使用 File System Access API；不支援的瀏覽器退回 <a download>
-		if ("showSaveFilePicker" in window) {
+		if (supportsFsa) {
 			let handle: FileSystemFileHandle;
 			try {
 				handle = await window.showSaveFilePicker({
@@ -172,8 +222,9 @@
 		window.addEventListener("dragover", e => { e.preventDefault(); });
 		window.addEventListener("drop", e => {
 			e.preventDefault();
-			const f = e.dataTransfer?.files?.[0];
-			if (f) void loadFile(f);
+			const dropped = extractDroppedFile(e.dataTransfer);
+			if (!dropped) return;
+			void dropped.handle.then(h => loadFile(dropped.file, h));
 		});
 	});
 </script>

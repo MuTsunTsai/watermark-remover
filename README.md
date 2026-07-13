@@ -29,6 +29,7 @@ pnpm typecheck  # TypeScript 型別檢查
 - [src/index.ts](src/index.ts) — 進入點（掛載 Vue app）
 - [src/App.vue](src/App.vue) — 主元件（浮水印類型切換、預覽、儲存）
 - [src/DropZone.vue](src/DropZone.vue) — 拖放／點選載入圖片的元件
+- [src/file-drop.ts](src/file-drop.ts) — 從 drop 事件取出檔案與 `FileSystemFileHandle` 的工具
 - [src/remover.ts](src/remover.ts) — 浮水印移除演算法
 - [src/watermark-data.ts](src/watermark-data.ts) — 浮水印素材資料（base64）
 
@@ -37,3 +38,12 @@ pnpm typecheck  # TypeScript 型別檢查
 - **新版**（預設）：screen blend、96 logo、offset 192。
 - **舊版**：alpha blend，依圖片尺寸自動選擇參數——寬高皆大於 1024 用 96 logo / offset 64，否則 48 / 32。
 - **自訂**：手動指定演算法與所有參數。
+
+## 儲存行為
+
+開檔與存檔使用 File System Access API（Chromium 系瀏覽器）：
+
+- **存檔**：直接覆寫來源檔案，保留原檔名與格式（依來源 MIME type 重新編碼），成功後以打勾動畫提示。只有在來源具有檔案 handle 時可用（以對話方塊開檔或從檔案系統拖入）。
+- **另存新檔**：跳出存檔對話方塊，預設檔名為 `原檔名_nowm.png`。
+
+不支援該 API 的瀏覽器（Firefox / Safari）只會顯示單一「儲存 PNG」按鈕，行為是傳統的 `<a download>` 下載；開檔則退回傳統的檔案選擇。
