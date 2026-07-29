@@ -3,7 +3,7 @@
 //   original = (watermarked - alpha * 255) / (1 - alpha)
 // 以及針對新版浮水印的 subtract / screen / lighten / addscale 反推公式。
 
-import { WATERMARK_BG_48, WATERMARK_BG_96, WATERMARK_INTENSITY_96 } from "./watermark-data";
+import { WATERMARK_BG_48, WATERMARK_BG_96, WATERMARK_INTENSITY_48, WATERMARK_INTENSITY_96 } from "./watermark-data";
 
 export type RemovalMode = "subtract" | "screen" | "lighten" | "addscale" | "blend";
 
@@ -25,18 +25,25 @@ const alphaMaps: Record<number, Float32Array> = {};
 
 // ─── 新版（subtract / linear dodge）演算法 ──────────────────
 // result = clamp(orig + intensity) → orig = max(0, result - intensity)
-// intensity map 來自純黑底測試圖萃取（96×96，max value ≈ 93）。
-const INTENSITY_MAP_SIZE = 96;
+// intensity map 來自純黑底測試圖萃取（見 scripts/extract-intensity.mjs），
+// 48 與 96 各有一份原生尺寸的 map；其它 logoSize 以最近點取樣縮放。
+const INTENSITY_SOURCES: Record<number, string> = {
+	48: WATERMARK_INTENSITY_48,
+	96: WATERMARK_INTENSITY_96,
+};
 
-let intensityMap96: Uint8Array | null = null;
+const intensityMaps: Record<number, Uint8Array> = {};
 
-function getIntensityMap96(): Uint8Array {
-	if (intensityMap96) return intensityMap96;
-	const bin = atob(WATERMARK_INTENSITY_96);
-	const arr = new Uint8Array(bin.length);
-	for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-	intensityMap96 = arr;
-	return arr;
+function getIntensityMap(size: number): { map: Uint8Array; mapSize: number } {
+	const mapSize = size in INTENSITY_SOURCES ? size : 96;
+	let map = intensityMaps[mapSize];
+	if (!map) {
+		const bin = atob(INTENSITY_SOURCES[mapSize]);
+		map = new Uint8Array(bin.length);
+		for (let i = 0; i < bin.length; i++) map[i] = bin.charCodeAt(i);
+		intensityMaps[mapSize] = map;
+	}
+	return { map, mapSize };
 }
 
 export function loadImage(src: string): Promise<HTMLImageElement> {
@@ -83,15 +90,15 @@ export async function removeWatermark(sourceImg: HTMLImageElement, options: Remo
 	if (mode !== "blend") {
 		// 新版（subtract / screen / lighten / addscale）：共用同一份 intensity map
 		// 但反推公式不同。intensity map 來自純黑底測試萃取的 logo 灰度值。
-		const map = getIntensityMap96();
+		const { map, mapSize } = getIntensityMap(logoSize);
 		for (let row = 0; row < logoSize; row++) {
 			for (let col = 0; col < logoSize; col++) {
 				const x = x0 + col;
 				const y = y0 + row;
 				if (x < 0 || y < 0 || x >= c.width || y >= c.height) continue;
-				const mr = Math.min(INTENSITY_MAP_SIZE - 1, Math.floor(row * INTENSITY_MAP_SIZE / logoSize));
-				const mc = Math.min(INTENSITY_MAP_SIZE - 1, Math.floor(col * INTENSITY_MAP_SIZE / logoSize));
-				const intensity = map[mr * INTENSITY_MAP_SIZE + mc];
+				const mr = Math.min(mapSize - 1, Math.floor(row * mapSize / logoSize));
+				const mc = Math.min(mapSize - 1, Math.floor(col * mapSize / logoSize));
+				const intensity = map[mr * mapSize + mc];
 				if (intensity === 0) continue;
 				const imgIdx = (y * c.width + x) * 4;
 				for (let ch = 0; ch < 3; ch++) {

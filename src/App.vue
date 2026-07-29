@@ -96,12 +96,17 @@
 	const options = computed<RemovalOptions | null>(() => {
 		const img = sourceImage.value;
 		if (!img) return null;
+		// 「大圖」的判定：寬和高皆大於 1024（舊版實測如此；新版的標準未知，先假定相同）
+		const large = img.naturalWidth > 1024 && img.naturalHeight > 1024;
 		switch (watermarkType.value) {
-			case "new":
-				return { mode: "screen", logoSize: 96, marginRight: 192, marginBottom: 192, addScale: 1 };
+			case "new": {
+				// 大圖 → 96 logo / offset 192；小圖 → 48 logo / offset 96
+				const logoSize = large ? 96 : 48;
+				const offset = large ? 192 : 96;
+				return { mode: "screen", logoSize, marginRight: offset, marginBottom: offset, addScale: 1 };
+			}
 			case "old": {
-				// 寬高皆大於 1024 → 96 logo / offset 64；否則 48 / 32
-				const large = img.naturalWidth > 1024 && img.naturalHeight > 1024;
+				// 大圖 → 96 logo / offset 64；小圖 → 48 logo / offset 32
 				const logoSize = large ? 96 : 48;
 				const offset = large ? 64 : 32;
 				return { mode: "blend", logoSize, marginRight: offset, marginBottom: offset, addScale: 1 };

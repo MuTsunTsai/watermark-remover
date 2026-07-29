@@ -13,6 +13,7 @@
 		"@rsbuild/core": "^2.1.5",
 		"@rsbuild/plugin-vue": "^2.0.1",
 		"@types/wicg-file-system-access": "^2023.10.7",
+		"fast-png": "^8.0.0",
 		"typescript": "^6.0.3",
 		"vue-tsc": "^3.3.6"
 	},

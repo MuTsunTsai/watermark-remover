@@ -35,8 +35,9 @@ pnpm typecheck  # TypeScript 型別檢查
 
 ## 浮水印類型
 
-- **新版**（預設）：screen blend、96 logo、offset 192。
-- **舊版**：alpha blend，依圖片尺寸自動選擇參數——寬高皆大於 1024 用 96 logo / offset 64，否則 48 / 32。
+- **新版**（預設）：screen blend——大圖用 96 logo / offset 192，小圖用 48 logo / offset 96。
+- **舊版**：alpha blend——大圖用 96 logo / offset 64，小圖用 48 logo / offset 32。
+- 「大圖」的判定為寬高皆大於 1024（新版的實際判定標準未知，暫時假定與舊版相同）。
 - **自訂**：手動指定演算法與所有參數。
 
 ## 儲存行為
